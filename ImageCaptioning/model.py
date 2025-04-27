@@ -23,10 +23,10 @@ class ImageCaptioningModel(nn.Module):
         x = torch.flatten(x,1)
         x = self.fc(x)
 
-        embeddings = self.embed(captions)
-        print('Embedding dims:',embeddings.shape)
+        embeddings = self.embed(captions)       
+        #print('Embedding dims:',embeddings.shape)
         x = x.unsqueeze(0)
-        print('X unsqueezed:',x.shape)
+        #print('X unsqueezed:',x.shape)
         embeddings = torch.cat((x, embeddings), dim=0)
 
         hidden,_ = self.lstm(embeddings)

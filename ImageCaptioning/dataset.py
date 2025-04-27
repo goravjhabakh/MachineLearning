@@ -82,7 +82,7 @@ def get_loader(root, annot_file, transform = None, batch_size = 32, num_workers 
     dataset = Flickr8kDataset(root, annot_file, transform=transform)
     with open('vocab.txt', 'w') as f:
         json.dump(dataset.vocab.stoi, f, indent=4)
-    print(f'Total Images: {len(dataset)}')
+    #print(f'Total Images: {len(dataset)}')
 
     pad_idx = dataset.vocab.stoi['<PAD>']
     loader = DataLoader(dataset = dataset, batch_size = batch_size, shuffle = shuffle,
