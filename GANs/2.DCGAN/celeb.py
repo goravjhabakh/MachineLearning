@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import torch.optim  as optim
@@ -5,7 +6,6 @@ from torch.utils.data import DataLoader
 import torchvision
 from torchvision import datasets, transforms
 from tqdm import tqdm
-from torch.utils.tensorboard import SummaryWriter
 
 # Models
 class Discriminator(nn.Module):
@@ -63,10 +63,10 @@ def init_weights(model):
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 lr = 2e-4
 z_dims = 100
-img_channels = 1
-features = 64
+img_channels = 3
+features = 16
 batch_size = 128
-num_epochs = 10
+num_epochs = 30
 img_size = 64
 
 disc = Discriminator(img_channels, features).to(device)
@@ -81,61 +81,57 @@ transform = transforms.Compose([
     transforms.Normalize([0.5]*img_channels, [0.5]*img_channels)
 ])
 
-dataset = datasets.MNIST(root='../../Datasets/', transform=transform, download=False)
-loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+dataset = datasets.ImageFolder(root='../../Datasets/celeba', transform=transform)
+loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
 
 opt_disc = optim.Adam(disc.parameters(), lr=lr, betas=(0.5,0.999))
 opt_gen = optim.Adam(gen.parameters(), lr=lr, betas=(0.5,0.999))
 criterion = nn.BCELoss()
 
-writer_real = SummaryWriter(f'runs/real')
-writer_fake = SummaryWriter(f'runs/fake')
-step = 0
-
 # Training loop
-for epoch in range(num_epochs):
-    loop = tqdm(loader, desc=f'Epoch: [{epoch+1}/{num_epochs}]')
-    idx = 1
-    total_loss_disc = 0
-    total_loss_gen = 0
+def train():
+    step = 1
+    for epoch in range(num_epochs):
+        loop = tqdm(loader, desc=f'Epoch: [{epoch+1}/{num_epochs}]')
+        idx = 1
+        total_loss_disc = 0
+        total_loss_gen = 0
 
-    for real,_ in loop:
-        real = real.to(device)
+        for real,_ in loop:
+            real = real.to(device)
 
-        # Train discriminator
-        noise = torch.randn(real.shape[0], z_dims, 1, 1).to(device)
-        fake = gen(noise)
+            # Train discriminator
+            noise = torch.randn(real.shape[0], z_dims, 1, 1).to(device)
+            fake = gen(noise)
 
-        out_real = disc(real).view(-1)
-        loss_real = criterion(out_real, torch.ones_like(out_real))
-        out_fake = disc(fake).view(-1)
-        loss_fake = criterion(out_fake, torch.zeros_like(out_fake))
-        loss_disc = (loss_fake + loss_real) / 2
-        total_loss_disc += loss_disc.item()
+            out_real = disc(real).view(-1)
+            loss_real = criterion(out_real, torch.ones_like(out_real))
+            out_fake = disc(fake).view(-1)
+            loss_fake = criterion(out_fake, torch.zeros_like(out_fake))
+            loss_disc = (loss_fake + loss_real) / 2
+            total_loss_disc += loss_disc.item()
 
-        disc.zero_grad()
-        loss_disc.backward(retain_graph = True)
-        opt_disc.step()
+            if idx % 5 == 0:
+                disc.zero_grad()
+                loss_disc.backward(retain_graph = True)
+                opt_disc.step()
 
-        # Train Generator
-        output = disc(fake).view(-1)
-        loss_gen = criterion(output, torch.ones_like(output))
-        total_loss_gen += loss_gen.item()
-        gen.zero_grad()
-        loss_gen.backward()
-        opt_gen.step()
+            # Train Generator
+            output = disc(fake).view(-1)
+            loss_gen = criterion(output, torch.ones_like(output))
+            total_loss_gen += loss_gen.item()
+            gen.zero_grad()
+            loss_gen.backward()
+            opt_gen.step()
+            loop.set_postfix(lossD = f'{(total_loss_disc / idx):.4f}', lossG = f'{(total_loss_gen / idx):.4f}')
 
-        if idx % 10 == 0: loop.set_postfix(lossD = f'{(total_loss_disc / idx):.4f}', lossG = f'{(total_loss_gen / idx):.4f}')
-        idx+=1
+            if idx % 500 == 0:
+                with torch.no_grad():
+                    fake = gen(fixed_noise)
+                    img_grid_fake = torchvision.utils.make_grid(fake, normalize=True)
+                    torchvision.utils.save_image(img_grid_fake, f'fake_images_celeb/celeb_{step}.png')
+                    step+=1
+            idx+=1
 
-        if idx == 10:
-            with torch.no_grad():
-                fake = gen(fixed_noise)
-                img_grid_fake = torchvision.utils.make_grid(fake, normalize=True)
-                img_grid_real = torchvision.utils.make_grid(real, normalize=True)
-
-                writer_fake.add_image("Fake", img_grid_fake, global_step=step)
-                writer_real.add_image("Real", img_grid_real, global_step=step)
-                step += 1
-
-                torchvision.utils.save_image(img_grid_fake, f'fake_images/epoch{epoch+1}.png')
+if __name__ == '__main__':
+    train()

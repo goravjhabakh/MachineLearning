@@ -162,4 +162,5 @@ cython_debug/
 
 Datasets/
 **/fake_images/
+**/fake_images_celeb/
 **/runs/
