@@ -1,5 +1,4 @@
 import os
-from collections import defaultdict
 from PIL import Image
 import torch
 from torch.utils.data import DataLoader, Dataset
@@ -8,18 +7,23 @@ from torchvision import transforms
 root_dir = '../Datasets/UTKFace/UTKFace'
 
 class DeagingDataset(Dataset):
-    def __init__(self, root, old = (50,75), young = (15,25), transform = None):
+    def __init__(self, root, transform = None):
         super().__init__()
         self.root = root
+        self.transform = transform
+        self.imgs = []
 
-    def get_unique_ages(self):
-        ages = defaultdict(int)
-        for file in os.listdir(self.root):
+        for file in os.listdir(root):
             age = int(file.split('_')[0])
-            ages[age]+=1
-        return ages
+            path = os.path.join(root,file)
+            if 20 <= age <= 30: self.imgs.append((path,0))
+            elif age >= 50: self.imgs.append((path,1))
+
+    def __len__(self):
+        return len(self.imgs)
     
-dataset = DeagingDataset(root_dir)
-ages = dataset.get_unique_ages()
-ages = sorted(ages.items(), key=lambda x: x[1], reverse=True)
-print(ages)
+    def __getitem__(self, index):
+        img_path, label = self.imgs[index]
+        img = Image.open(img_path).convert('RGB')
+        if self.transform: img = self.transform(img)
+        return img,label

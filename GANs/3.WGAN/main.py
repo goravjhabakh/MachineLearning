@@ -22,8 +22,7 @@ class Discriminator(nn.Module):
             self._block(features, features*2, 4, 2, 1),
             self._block(features*2, features*4, 4, 2, 1),
             self._block(features*4, features*8, 4, 2, 1),
-            nn.Conv2d(features*8, 1, 4, 1, 0),
-            nn.Sigmoid()
+            nn.Conv2d(features*8, 1, 4, 1, 0)
         )
 
     def _block(self, in_channels, out_channels, kernel_size, stride, padding):
@@ -44,7 +43,7 @@ class Generator(nn.Module):
             self._block(features*8, features*4, 4, 2, 1),
             self._block(features*4, features*2, 4, 2, 1),
             self._block(features*2, features, 4, 2, 1),
-            nn.ConvTranspose2d(features*2, out_channels, 4, 2, 1, bias=False),
+            nn.ConvTranspose2d(features, out_channels, 4, 2, 1, bias=False),
             nn.Tanh()
         )
     
@@ -81,7 +80,7 @@ init_weights(disc)
 gen = Generator(z_dims, features, img_channels).to(device)
 init_weights(gen)
 
-fixed_noise = torch.rand((32, z_dims, 1, 1)).to(device)
+fixed_noise = torch.randn((32, z_dims, 1, 1)).to(device)
 transform = transforms.Compose([
     transforms.Resize(img_size),
     transforms.ToTensor(),
@@ -104,9 +103,7 @@ gen.train()
 # Training loop
 for epoch in range(num_epochs):
     loop = tqdm(loader, desc=f'Epoch: [{epoch+1}/{num_epochs}]')
-    idx = 1
-    total_loss_disc = 0
-    total_loss_gen = 0
+    idx = 0
 
     for real,_ in loop:
         real = real.to(device)
@@ -118,25 +115,22 @@ for epoch in range(num_epochs):
             disc_real = disc(real).view(-1)
             disc_fake = disc(fake).view(-1)
             loss_disc = -(torch.mean(disc_real) - torch.mean(disc_fake)) # Negative of minimizing is maximizing
-            total_loss_disc += loss_disc.item() 
 
             disc.zero_grad()
-            loss_disc.backward(retain_graph = True)
+            loss_disc.backward()
             opt_disc.step()
 
             for p in disc.parameters():
                 p.data.clamp_(-clip, clip)
 
         # Train Generator
+        noise = torch.randn(real.shape[0], z_dims, 1, 1).to(device)
+        fake = gen(noise)
         output = disc(fake).view(-1)
         loss_gen = -torch.mean(output)
-        total_loss_gen += loss_gen.item()
         gen.zero_grad()
         loss_gen.backward()
         opt_gen.step()
-
-        if idx % 100 == 0: loop.set_postfix(lossD = f'{(total_loss_disc / idx):.4f}', lossG = f'{(total_loss_gen / idx):.4f}')
-        idx+=1
 
         if idx % 250 == 0:
             with torch.no_grad():
@@ -148,3 +142,4 @@ for epoch in range(num_epochs):
                 writer_real.add_image("Real", img_grid_real, global_step=step)
                 step += 1
                 torchvision.utils.save_image(img_grid_fake, f'fake_images/epoch{step}.png')
+        idx+=1
